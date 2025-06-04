@@ -1,0 +1,7 @@
+.git
+.env
+nestjs-app/node_modules
+nestjs-app/dist
+npm-debug.log
+nestjs-app/npm-debug.log
+mongo/ 

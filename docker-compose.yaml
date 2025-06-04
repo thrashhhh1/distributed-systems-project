@@ -1,0 +1,157 @@
+services:
+  app:
+    build:
+      context: ./nestjs-app
+    container_name: distributedsystems
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    environment:
+      PORT: ${PORT:-3000}
+      MONGODB_URL: ${MONGODB_URL:-mongodb://mongodb:27017/mongo-distributedsystems}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      CACHE_TTL: ${CACHE_TTL:-60}
+      TRAFFIC_DISTRIBUTION_TYPES: ${TRAFFIC_DISTRIBUTION_TYPES:-poisson,uniforme}
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./nestjs-app:/usr/src/app
+      - /usr/src/app/node_modules
+      - ./data:/data
+    command: npm run start:dev
+
+  # Servicio MongoDB
+  mongodb:
+    image: mongo:5
+    container_name: mongo-distributedsystems
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+
+  # Servicio Redis
+  redis:
+    image: redis:latest
+    container_name: redis-distributedsystems
+    ports:
+      - "6379:6379"
+    restart: always
+    ### Politicas de remocion y tamaño de cache, descomentar la politica a utilizar y comentar TODAS las demas (Cambian tamaño de cache a gusto):
+    ## Politica de remocion LRU
+    command: redis-server --save "" --appendonly no --maxmemory 250kb --maxmemory-policy allkeys-lru
+    ## Politica de remocion LFU
+    # command: redis-server --save "" --appendonly no --maxmemory 150kb --maxmemory-policy allkeys-lfu
+
+  # Servicios de Hadoop y Pig 
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    hostname: namenode
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    env_file:
+      - ./hadoop-config/hadoop.env
+    environment:
+      - CLUSTER_NAME=test
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+
+    healthcheck:
+      test: ["CMD", "hdfs", "dfsadmin", "-report"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    hostname: datanode
+    env_file:
+      - ./hadoop-config/hadoop.env
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    depends_on:
+      namenode:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "stat", "/hadoop/dfs/data/current/VERSION"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    hostname: resourcemanager
+    ports:
+      - "8088:8088"
+    env_file:
+      - ./hadoop-config/hadoop.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    depends_on:
+      namenode:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://resourcemanager:8088"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    hostname: nodemanager
+    env_file:
+      - ./hadoop-config/hadoop.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870,resourcemanager:8088"
+    depends_on:
+      namenode:
+        condition: service_healthy
+      resourcemanager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://nodemanager:8042"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  pig:
+    build:
+      context: ./hadoop-env/pig-dockerfile
+      dockerfile: Dockerfile
+    hostname: pig
+
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+      YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+    depends_on:
+      namenode:
+        condition: service_healthy
+      datanode:
+        condition: service_healthy
+      resourcemanager:
+        condition: service_healthy
+      nodemanager:
+        condition: service_healthy
+    volumes:
+      - ./pig-scripts:/pig-scripts
+      - ./nestjs-app/data:/data
+      - ./results:/app_results
+    entrypoint: ["/usr/local/bin/load_data.sh"]
+    restart: unless-stopped
+    networks:
+      - hadoop-network
+
+volumes:
+  mongo_data:
+  hadoop_namenode:
+  hadoop_datanode:
+
+networks:
+  hadoop-network:
+    driver: bridge
