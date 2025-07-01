@@ -20,7 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@elastic/elasticsearch": "^9.0.2",
+    "@elastic/elasticsearch": "^8.18.2",
     "@nestjs/cache-manager": "^3.0.1",
     "@nestjs/common": "^10.4.15",
     "@nestjs/config": "^4.0.2",

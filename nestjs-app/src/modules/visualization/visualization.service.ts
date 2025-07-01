@@ -7,18 +7,12 @@ export class VisualizationService {
 
   constructor(private readonly esService: NestElasticsearchService) {}
 
-  /**
-   * Indexa un lote de documentos en un índice específico.
-   * @param index El nombre del índice en Elasticsearch.
-   * @param documents Un array de objetos JSON para indexar.
-   */
   async bulkIndex(index: string, documents: any[]) {
     if (documents.length === 0) {
       this.logger.warn(`No hay documentos para indexar en '${index}'.`);
       return;
     }
 
-    // Mapeamos los documentos al formato que requiere la API Bulk de Elasticsearch
     const body = documents.flatMap((doc) => [
       { index: { _index: index } },
       doc,
@@ -26,13 +20,12 @@ export class VisualizationService {
 
     try {
       const response = await this.esService.bulk({
-        refresh: true, // Refresca el índice para que los datos estén disponibles para búsqueda inmediatamente
+        refresh: true,
         body,
       });
 
       if (response.errors) {
         const erroredDocuments = [];
-        // Extraer los errores para un mejor logging
         response.items.forEach((action, i) => {
           const operation = Object.keys(action)[0];
           if (action[operation].error) {
@@ -63,11 +56,6 @@ export class VisualizationService {
     }
   }
 
-  /**
-   * Crea un índice con un mapeo específico. Útil para definir tipos de datos como geo_point.
-   * @param index El nombre del índice a crear.
-   * @param mapping La configuración del mapeo.
-   */
   async createIndexWithMapping(index: string, mapping: any) {
     const indexExists = await this.esService.indices.exists({ index });
 

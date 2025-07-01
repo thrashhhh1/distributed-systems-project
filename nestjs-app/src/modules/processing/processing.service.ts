@@ -1,4 +1,3 @@
-// src/processing/processing.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs/promises';
@@ -19,9 +18,6 @@ export class ProcessingService {
     private readonly configService: ConfigService,
   ) {}
 
-  /**
-   * Orquesta todo el proceso de lectura de los resultados de Pig y su indexación.
-   */
   async processAndIndexPigResults() {
     this.logger.log(
       '--- Iniciando proceso de indexación de resultados de Pig ---',
@@ -37,10 +33,8 @@ export class ProcessingService {
 
       this.logger.log(`Procesando directorio: ${latestExecutionDir}`);
 
-      // 1. Indexar las alertas únicas y limpias (el dataset principal)
       await this.processUniqueAlerts(latestExecutionDir);
 
-      // 2. Indexar las métricas agregadas
       await this.processAggregatedMetric(
         latestExecutionDir,
         'peak_hours',
@@ -92,22 +86,18 @@ export class ProcessingService {
     }
   }
 
-  /**
-   * Procesa el archivo principal de alertas únicas.
-   */
   private async processUniqueAlerts(executionDir: string) {
     const indexName = 'traffic_alerts';
     const filePath = path.join(
       executionDir,
       'final_unique_waze_alerts',
       'part-m-00000',
-    ); // Pig nombra así a sus archivos de salida
+    );
 
-    // Crear un mapeo para que Elasticsearch entienda la ubicación como un punto geográfico
     await this.esService.createIndexWithMapping(indexName, {
       properties: {
         location: { type: 'geo_point' },
-        pubMillis: { type: 'date', format: 'epoch_millis' }, // Definir el campo de fecha
+        pubMillis: { type: 'date', format: 'epoch_millis' },
       },
     });
 
@@ -139,12 +129,10 @@ export class ProcessingService {
 
     const formattedRecords = records.map((r) => ({
       ...r,
-      // Combinar latitud y longitud en un solo objeto para geo_point
       location: {
         lat: parseFloat(r.location_y),
         lon: parseFloat(r.location_x),
       },
-      // Convertir campos numéricos
       nThumbsUp: parseInt(r.nThumbsUp, 10),
       reportRating: parseInt(r.reportRating, 10),
       reliability: parseInt(r.reliability, 10),
@@ -152,7 +140,6 @@ export class ProcessingService {
       confidence: parseInt(r.confidence, 10),
       roadType: parseInt(r.roadType, 10),
       pubMillis: parseInt(r.pubMillis, 10),
-      // Eliminar los campos originales de lat/lon
       location_x: undefined,
       location_y: undefined,
     }));
@@ -160,9 +147,6 @@ export class ProcessingService {
     await this.esService.bulkIndex(indexName, formattedRecords);
   }
 
-  /**
-   * Procesa un archivo CSV de métrica agregada de forma genérica.
-   */
   private async processAggregatedMetric(
     executionDir: string,
     indexName: string,
@@ -171,19 +155,11 @@ export class ProcessingService {
   ) {
     const filePath = path.join(executionDir, fileName);
 
-    // ANTES (Incorrecto):
-    // const records = await this.readAndParseCsv(filePath, columns, true);
-
-    // AHORA (Correcto):
-    // Le pasamos el número 2 para que empiece a parsear desde la segunda línea,
-    // ignorando así la cabecera.
     const records = await this.readAndParseCsv(filePath, columns, 2);
 
-    // Convertir valores numéricos que vienen como strings
     const formattedRecords = records.map((record) => {
       const newRecord = { ...record };
       for (const key in newRecord) {
-        // Usamos endsWith para ser más flexibles (ej. alert_count, accident_count)
         if (key.endsWith('count') || key.endsWith('average')) {
           newRecord[key] = parseFloat(newRecord[key]);
         }
@@ -194,9 +170,6 @@ export class ProcessingService {
     await this.esService.bulkIndex(indexName, formattedRecords);
   }
 
-  /**
-   * Encuentra el directorio de la última ejecución de Pig.
-   */
   private async getLatestExecutionDirectory(): Promise<string | null> {
     try {
       const allEntries = await fs.readdir(this.PIG_OUTPUT_DIR, {
@@ -224,9 +197,6 @@ export class ProcessingService {
     }
   }
 
-  /**
-   * Lee y parsea un archivo CSV.
-   */
   private async readAndParseCsv(
     filePath: string,
     columns: string[],
@@ -240,7 +210,7 @@ export class ProcessingService {
           {
             delimiter: ',',
             columns: columns,
-            from_line: fromLine, // Esta opción espera un número
+            from_line: fromLine,
           },
           (err, records) => {
             if (err) {
