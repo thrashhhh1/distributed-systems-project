@@ -1,4 +1,3 @@
-// src/processing/processing.controller.ts
 import { Controller, Post, Logger } from '@nestjs/common';
 import { ProcessingService } from './processing.service';
 
@@ -13,8 +12,6 @@ export class ProcessingController {
     this.logger.log(
       'Se recibió una solicitud para iniciar la indexación de los resultados de Pig.',
     );
-    // No esperamos a que termine para responder rápidamente a la solicitud HTTP.
-    // El proceso correrá en segundo plano.
     this.processingService.processAndIndexPigResults();
     return {
       message:
@@ -22,5 +19,3 @@ export class ProcessingController {
     };
   }
 }
-
-

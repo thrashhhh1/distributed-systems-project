@@ -8,6 +8,7 @@ Tecnologías: NestJS como framework de backend, MongoDB como sistema de almacena
 * **Almacenamiento:** Guarda los eventos de Waze obtenidos en una base de datos MongoDB.
 * **Homogeneización y Filtrado:** Procesa los datos crudos exportados de MongoDB usando Apache Pig para eliminar duplicados, limpiar y estandarizar campos, y aplicar filtros de calidad y relevancia.
 * **Procesamiento y Análisis:** Realiza análisis detallados sobre los datos limpios utilizando Apache Pig para generar reportes y estadísticas clave sobre las alertas de tráfico.
+* **Orquestación Automatizada:** Todo el pipeline (Scraping → Procesamiento con Pig → Indexación en Elasticsearch) se ejecuta de forma secuencial y automática sin intervención manual.
 
 ## Prerequisitos
 
@@ -15,6 +16,7 @@ Para ejecutar este proyecto, se necesita instalado:
 
 * **Docker**
 * **Docker Compose**
+* **Postman o Cliente API preferido**
 
 (No es estrictamente necesario tener Node.js o npm instalados en la máquina host si solo se va a ejecutar via Docker).
 
@@ -72,6 +74,23 @@ Para comparar diferentes configuraciones de caché:
     pig -f /pig-scripts/processing.pig
     ```
 3.  Una vez finalice esta ejecución, en la raíz del proyecto se generarán unos archivos con los resultados de este.
+
+## Envío de datos a Elasticsearch
+
+
+Una vez completados los procesos anteriores de recolección y transformación, el paso final es enviar los datos a la instancia de Elasticsearch para su indexación. Para ello, se debe realizar una petición POST mediante un cliente de API (como Postman, Insomnia o cURL) al endpoint específico donde se almacenarán los datos.
+
+Este endpoint generalmente apunta a un índice concreto. La estructura de la URL sería similar a esta:
+
+(http://localhost:3000/processing/start-indexing)
+
+
+# Visualización de datos
+Para ver los datos tendremos que acceder a:
+
+(http://localhost:5601/)
+
+y configurar Kibana con los datos que queramos analizar.
 
 
 ## Detener la Aplicación

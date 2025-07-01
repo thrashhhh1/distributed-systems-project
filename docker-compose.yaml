@@ -15,21 +15,18 @@ services:
       REDIS_PORT: ${REDIS_PORT:-6379}
       CACHE_TTL: ${CACHE_TTL:-60}
       TRAFFIC_DISTRIBUTION_TYPES: ${TRAFFIC_DISTRIBUTION_TYPES:-poisson,uniforme}
-      # Añade la variable de entorno para Elasticsearch
       ELASTICSEARCH_NODE: http://elasticsearch:9200
-      # Añade la variable para el directorio de salida de Pig
       PIG_OUTPUT_DIR: /app_results
     depends_on:
       - mongodb
       - redis
-      - elasticsearch # Añadido para asegurar el orden de inicio
+      - elasticsearch 
     volumes:
       - ./nestjs-app:/usr/src/app
       - /usr/src/app/node_modules
-      # Montamos el directorio de resultados para que NestJS pueda leerlo
       - ./results:/app_results
     command: npm run start:dev
-    networks: # <--- AÑADIDO
+    networks:
       - hadoop-network
 
   mongodb:
@@ -40,7 +37,7 @@ services:
     volumes:
       - mongo_data:/data/db
     restart: always
-    networks: # <--- AÑADIDO
+    networks: 
       - hadoop-network
 
   redis:
@@ -50,7 +47,7 @@ services:
       - "6379:6379"
     restart: always
     command: redis-server --save "" --appendonly no --maxmemory 250kb --maxmemory-policy allkeys-lru
-    networks: # <--- AÑADIDO
+    networks: 
       - hadoop-network
 
   # --- Servicios de Hadoop y Pig ---
@@ -71,7 +68,7 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
-    networks: # <--- AÑADIDO
+    networks: 
       - hadoop-network
 
   datanode:
@@ -91,7 +88,7 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
-    networks: # <--- AÑADIDO
+    networks: 
       - hadoop-network
 
   resourcemanager:
@@ -111,7 +108,7 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
-    networks: # <--- AÑADIDO
+    networks: 
       - hadoop-network
 
   nodemanager:
@@ -131,7 +128,7 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
-    networks: # <--- AÑADIDO
+    networks: 
       - hadoop-network
 
   pig:
@@ -149,12 +146,10 @@ services:
       nodemanager: { condition: service_healthy }
     volumes:
       - ./pig-scripts:/pig-scripts
-      # El contenedor de NestJS ahora crea los datos en /usr/src/app/data
-      # Montamos ese directorio para que Pig pueda accederlo.
       - ./nestjs-app/data:/waze_incidents
       - ./results:/app_results
     entrypoint: ["/usr/local/bin/load_data.sh"]
-    restart: "no" # Cambiado a "no" para que solo se ejecute una vez
+    restart: "no" 
     networks:
       - hadoop-network
 
@@ -165,13 +160,13 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # Limitar memoria para evitar problemas
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" 
     ports:
       - "9200:9200"
     volumes:
       - elastic_data:/usr/share/elasticsearch/data
     restart: always
-    networks: # <--- AÑADIDO
+    networks: 
       - hadoop-network
 
   kibana:
@@ -184,14 +179,14 @@ services:
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     restart: always
-    networks: # <--- AÑADIDO
+    networks:
       - hadoop-network
 
 volumes:
   mongo_data:
   hadoop_namenode:
   hadoop_datanode:
-  elastic_data: # <--- AÑADIDO para persistencia de Elasticsearch
+  elastic_data: 
 
 networks:
   hadoop-network:
