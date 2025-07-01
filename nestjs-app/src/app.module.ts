@@ -9,6 +9,8 @@ import { ScraperModule } from './modules/scraper/scraper.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { TrafficGeneratorModule } from './modules/traffic-generator/traffic-generator.module';
 import { CacheModule } from './modules/cache/cache.module';
+import { VisualizationModule } from './modules/visualization/visualization.module';
+import { ProcessingModule } from './modules/processing/processing.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { CacheModule } from './modules/cache/cache.module';
     StorageModule,
     TrafficGeneratorModule,
     CacheModule,
+    ProcessingModule,
+    VisualizationModule,
   ],
 })
 export class AppModule {}

@@ -11,7 +11,7 @@ RUN npm ci --omit=dev
 FROM base AS dev_deps 
 RUN npm ci 
 
-# Build
+# Build 
 FROM dev_deps AS builder 
 COPY . .
 RUN npm run build

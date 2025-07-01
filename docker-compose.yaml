@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   app:
     build:
@@ -13,16 +15,23 @@ services:
       REDIS_PORT: ${REDIS_PORT:-6379}
       CACHE_TTL: ${CACHE_TTL:-60}
       TRAFFIC_DISTRIBUTION_TYPES: ${TRAFFIC_DISTRIBUTION_TYPES:-poisson,uniforme}
+      # Añade la variable de entorno para Elasticsearch
+      ELASTICSEARCH_NODE: http://elasticsearch:9200
+      # Añade la variable para el directorio de salida de Pig
+      PIG_OUTPUT_DIR: /app_results
     depends_on:
       - mongodb
       - redis
+      - elasticsearch # Añadido para asegurar el orden de inicio
     volumes:
       - ./nestjs-app:/usr/src/app
       - /usr/src/app/node_modules
-      - ./data:/data
+      # Montamos el directorio de resultados para que NestJS pueda leerlo
+      - ./results:/app_results
     command: npm run start:dev
+    networks: # <--- AÑADIDO
+      - hadoop-network
 
-  # Servicio MongoDB
   mongodb:
     image: mongo:5
     container_name: mongo-distributedsystems
@@ -31,22 +40,20 @@ services:
     volumes:
       - mongo_data:/data/db
     restart: always
+    networks: # <--- AÑADIDO
+      - hadoop-network
 
-  # Servicio Redis
   redis:
     image: redis:latest
     container_name: redis-distributedsystems
     ports:
       - "6379:6379"
     restart: always
-    ### Politicas de remocion y tamaño de cache, descomentar la politica a utilizar y comentar TODAS las demas (Cambian tamaño de cache a gusto):
-    ## Politica de remocion LRU
     command: redis-server --save "" --appendonly no --maxmemory 250kb --maxmemory-policy allkeys-lru
-    ## Politica de remocion LFU
-    # command: redis-server --save "" --appendonly no --maxmemory 150kb --maxmemory-policy allkeys-lfu
+    networks: # <--- AÑADIDO
+      - hadoop-network
 
-  # Servicios de Hadoop y Pig 
-
+  # --- Servicios de Hadoop y Pig ---
   namenode:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
     hostname: namenode
@@ -59,12 +66,13 @@ services:
       - CLUSTER_NAME=test
     volumes:
       - hadoop_namenode:/hadoop/dfs/name
-
     healthcheck:
       test: ["CMD", "hdfs", "dfsadmin", "-report"]
       interval: 5s
       timeout: 2s
       retries: 10
+    networks: # <--- AÑADIDO
+      - hadoop-network
 
   datanode:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
@@ -83,6 +91,8 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
+    networks: # <--- AÑADIDO
+      - hadoop-network
 
   resourcemanager:
     image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
@@ -101,6 +111,8 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
+    networks: # <--- AÑADIDO
+      - hadoop-network
 
   nodemanager:
     image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
@@ -119,13 +131,14 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
+    networks: # <--- AÑADIDO
+      - hadoop-network
 
   pig:
     build:
       context: ./hadoop-env/pig-dockerfile
       dockerfile: Dockerfile
     hostname: pig
-
     environment:
       CORE_CONF_fs_defaultFS: hdfs://namenode:8020
       YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
@@ -136,18 +149,53 @@ services:
       nodemanager: { condition: service_healthy }
     volumes:
       - ./pig-scripts:/pig-scripts
-      - ./nestjs-app/data:/data
+      # El contenedor de NestJS ahora crea los datos en /usr/src/app/data
+      # Montamos ese directorio para que Pig pueda accederlo.
+      - ./nestjs-app/data:/waze_incidents
       - ./results:/app_results
     entrypoint: ["/usr/local/bin/load_data.sh"]
-    restart: unless-stopped
+    restart: "no" # Cambiado a "no" para que solo se ejecute una vez
     networks:
+      - hadoop-network
+
+  # --- Servicios de ElasticSearch y Kibana ---
+  elasticsearch:
+    image: elasticsearch:8.9.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # Limitar memoria para evitar problemas
+    ports:
+      - "9200:9200"
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    restart: always
+    networks: # <--- AÑADIDO
+      - hadoop-network
+
+  kibana:
+    image: kibana:8.9.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    restart: always
+    networks: # <--- AÑADIDO
       - hadoop-network
 
 volumes:
   mongo_data:
   hadoop_namenode:
   hadoop_datanode:
+  elastic_data: # <--- AÑADIDO para persistencia de Elasticsearch
 
 networks:
   hadoop-network:
     driver: bridge
+
+
+

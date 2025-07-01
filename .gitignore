@@ -3,3 +3,5 @@ nestjs-app/dist
 /results
 nestjs-app/node_modules
 nestjs-app/data
+
+/.vscode
